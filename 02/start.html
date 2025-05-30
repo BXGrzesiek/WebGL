@@ -68,7 +68,8 @@
     let elapsedTime = 0;
     let texture1;
     let texture2;
-    let drawMode = 2; // 1 = jedna tekstura, 2 = naprzemienne tekstury, 3 = blend
+    let drawMode = 1; // 1 = jedna tekstura, 2 = naprzemienne tekstury, 3 = blend
+    let swapTextures = false; // do mieszania tekstur w trybie 2
     
 
     function start() {
@@ -155,7 +156,7 @@
       initCamera();
 
       requestAnimationFrame(draw);
-      document.getElementById("mode").textContent = "Tryb: Naprzemienne tekstury (2)";
+      document.getElementById("mode").textContent = "Tryb: Jedna tekstura (1)";
     }
 
     function initShaders(gl) {
@@ -260,6 +261,9 @@
         if (e.code === "Digit3" && !document.pointerLockElement) {
           drawMode = 3;
           document.getElementById("mode").textContent = "Tryb: Mieszanie tekstur (3)";
+        }
+        if (e.code === "KeyR" && drawMode === 2 && !document.pointerLockElement) {
+          swapTextures = !swapTextures;
         }
       });
       window.addEventListener("keyup", e => keys[e.code] = false);
@@ -409,7 +413,8 @@
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, texture2);
         for (let i = 0; i < 6; i++) {
-          gl.uniform1i(gl.getUniformLocation(program, "useTexture2"), i % 2);
+          let useTex2 = swapTextures ? 1 - (i % 2) : (i % 2);
+          gl.uniform1i(gl.getUniformLocation(program, "useTexture2"), useTex2);
           gl.drawArrays(gl.TRIANGLES, i * (n_draw/6), n_draw/6);
         }
       } else if (drawMode === 3) {

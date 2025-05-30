@@ -12,13 +12,14 @@ Projekt demonstruje wykorzystanie WebGL do renderowania sześcianu z obsługą k
 - **Wyświetlanie aktualnego trybu renderowania**
 - **Trzy tryby renderowania sześcianu:**
 
-### Tryb 1: Jedna tekstura na wszystkich ściankach
+### Tryb 1: Jedna tekstura na wszystkich ściankach (domyślny)
 - Aktywacja: klawisz `1` (po wyjściu z pointer lock)
 - Na każdej ściance sześcianu nakładana jest ta sama tekstura
 
 ### Tryb 2: Naprzemienne tekstury na ściankach
 - Aktywacja: klawisz `2` (po wyjściu z pointer lock)
 - Na przemian na ściankach sześcianu nakładane są dwie różne tekstury (parzyste – tekstura 1, nieparzyste – tekstura 2)
+- **Dodatkowo:** klawisz `R` (po wyjściu z pointer lock) zamienia miejscami tekstury na ściankach (parzyste <-> nieparzyste)
 
 ### Tryb 3: Mieszanie tekstur (blend)
 - Aktywacja: klawisz `3` (po wyjściu z pointer lock)
@@ -28,7 +29,8 @@ Projekt demonstruje wykorzystanie WebGL do renderowania sześcianu z obsługą k
 1. Uruchom plik `start.html` w nowoczesnej przeglądarce.
 2. Kliknij w canvas, aby aktywować sterowanie myszą (pointer lock).
 3. Aby przełączyć tryb renderowania, wyjdź z pointer lock (klawisz Esc), następnie naciśnij `1`, `2` lub `3`.
-4. Informacja o aktualnym trybie wyświetlana jest w lewym górnym rogu.
+4. W trybie 2 możesz nacisnąć `R`, aby zamienić miejscami tekstury na ściankach.
+5. Informacja o aktualnym trybie wyświetlana jest w lewym górnym rogu.
 
 ## Wymagania
 - Przeglądarka z obsługą WebGL2
