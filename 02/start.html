@@ -8,11 +8,13 @@
     body, html { margin: 0; padding: 0; overflow: hidden; height: 100%; }
     canvas#glcanvas { width: 100%; height: 100%; display: block; }
     #fps { position: absolute; top: 10px; left: 10px; color: white; font-family: monospace; }
+    #mode { position: absolute; top: 30px; left: 10px; color: white; font-family: monospace; }
   </style>
 </head>
 <body>
   <canvas id="glcanvas"></canvas>
   <div id="fps"></div>
+  <div id="mode"></div>
 
   <!-- Vertex Shader -->
   <script id="vertex-shader" type="x-shader/x-vertex">
@@ -37,8 +39,15 @@
     varying vec3 vColor;
     varying vec2 TexCoord;
     uniform sampler2D texture1;
+    uniform sampler2D texture2;
+    uniform int useTexture2;
+
     void main() {
-      gl_FragColor = texture2D(texture1, TexCoord);
+      if (useTexture2 == 1) {
+        gl_FragColor = texture2D(texture2, TexCoord);
+      } else {
+        gl_FragColor = texture2D(texture1, TexCoord);
+      }
     }
   </script>
 
@@ -53,6 +62,8 @@
     let startTime = 0;
     let elapsedTime = 0;
     let texture1;
+    let texture2;
+    let drawMode = 2; // 1 = jedna tekstura, 2 = naprzemienne tekstury
     
 
     function start() {
@@ -76,7 +87,11 @@
       gl.useProgram(program);
       gl.enable(gl.DEPTH_TEST);
 
-      // Inicjalizacja tekstury
+      // Ustawienie slotów samplerów
+      gl.uniform1i(gl.getUniformLocation(program, "texture1"), 0); // TEXTURE0
+      gl.uniform1i(gl.getUniformLocation(program, "texture2"), 1); // TEXTURE1
+
+      // Inicjalizacja tekstury1
       texture1 = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, texture1);
       const level = 0;
@@ -102,6 +117,32 @@
       };
       image.crossOrigin = "";
       image.src = "https://cdn.pixabay.com/photo/2013/09/22/19/14/brick-wall-185081_960_720.jpg";
+      
+      // Inicjalizacja tekstury2
+      texture2 = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, texture2);
+      const level2 = 0;
+      const internalFormat2 = gl.RGBA;
+      const width2 = 1;
+      const height2 = 1;
+      const border2 = 0;  
+      const srcFormat2 = gl.RGBA;
+      const srcType2 = gl.UNSIGNED_BYTE;
+      const pixel2 = new Uint8Array([0, 0, 255, 255]);
+      gl.texImage2D(gl.TEXTURE_2D, level2, internalFormat2, width2, height2, border2, srcFormat2, srcType2, pixel2);
+
+      const image2 = new Image();
+      image2.onload = function() {
+        gl.bindTexture(gl.TEXTURE_2D, texture2);
+        gl.texImage2D(gl.TEXTURE_2D, level2, internalFormat2, srcFormat2, srcType2, image2);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      };
+      image2.crossOrigin = "";
+      image2.src = "https://cdn.pixabay.com/photo/2016/11/29/04/49/abstract-1867395_1280.jpg";
 
       setupInputHandlers();
       setupPointerLock(canvas);
@@ -109,6 +150,7 @@
       initCamera();
 
       requestAnimationFrame(draw);
+      document.getElementById("mode").textContent = "Tryb: Naprzemienne tekstury (2)";
     }
 
     function initShaders(gl) {
@@ -200,7 +242,17 @@
     }
 
     function setupInputHandlers() {
-      window.addEventListener("keydown", e => keys[e.code] = true);
+      window.addEventListener("keydown", e => {
+        keys[e.code] = true;
+        if (e.code === "Digit1" && !document.pointerLockElement) {
+          drawMode = 1;
+          document.getElementById("mode").textContent = "Tryb: Jedna tekstura (1)";
+        }
+        if (e.code === "Digit2" && !document.pointerLockElement) {
+          drawMode = 2;
+          document.getElementById("mode").textContent = "Tryb: Naprzemienne tekstury (2)";
+        }
+      });
       window.addEventListener("keyup", e => keys[e.code] = false);
     }
 
@@ -327,7 +379,6 @@
       startTime = performance.now();
       licznik++;
       let fFps = 1000 / elapsedTime;
-      // ograniczenie częstotliwości odświeżania napisu do ok 1/s
       if(licznik > fFps) {
         fpsElem.textContent = `FPS: ${fFps.toFixed(1)}`;
         licznik = 0;
@@ -336,12 +387,24 @@
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       handleCamera();
 
-      // Aktywacja tekstury
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, texture1);
-      gl.uniform1i(gl.getUniformLocation(program, "texture1"), 0);
-
-      gl.drawArrays(gl.TRIANGLES, 0, n_draw);
+      if (drawMode === 1) {
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture1);
+        gl.uniform1i(gl.getUniformLocation(program, "useTexture2"), 0);
+        gl.drawArrays(gl.TRIANGLES, 0, n_draw);
+      } else {
+        // Bindowanie obu tekstur na odpowiednie sloty
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture1);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, texture2);
+        // W pętli zmieniamy tylko uniform useTexture2
+        for (let i = 0; i < 6; i++) {
+          gl.uniform1i(gl.getUniformLocation(program, "useTexture2"), i % 2);
+          gl.drawArrays(gl.TRIANGLES, i * (n_draw/6), n_draw/6);
+        }
+      }
+      
       requestAnimationFrame(draw);
     }
 
