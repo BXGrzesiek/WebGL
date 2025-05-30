@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>WebGL FPS Scene</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+  <style>
+    body, html { margin: 0; padding: 0; overflow: hidden; height: 100%; }
+    canvas#glcanvas { width: 100%; height: 100%; display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="glcanvas"></canvas>
+
+  <!-- Vertex Shader -->
+  <script id="vertex-shader" type="x-shader/x-vertex">
+    attribute vec3 position;
+    attribute vec3 color;
+    varying vec3 vColor;
+    uniform mat4 model;
+    uniform mat4 view;
+    uniform mat4 proj;
+    void main() {
+      gl_Position = proj * view * model * vec4(position, 1.0);
+      vColor = color;
+    }
+  </script>
+
+  <!-- Fragment Shader -->
+  <script id="fragment-shader" type="x-shader/x-fragment">
+    precision mediump float;
+    varying vec3 vColor;
+    void main() {
+      gl_FragColor = vec4(vColor, 1.0);
+    }
+  </script>
+
+  <!-- Główna logika -->
+  <script>
+    let gl, program, camera = {}, n_draw = 0, keys = {};
+    
+
+    function start() {
+      const vec3 = glMatrix.vec3;
+      const mat4 = glMatrix.mat4;
+      const canvas = document.getElementById("glcanvas");
+      gl = canvas.getContext("webgl2");
+      if (!gl) return alert("WebGL not supported");
+
+      gl.clearColor(0.1, 0.1, 0.1, 1.0);
+      program = initShaders(gl);
+      gl.useProgram(program);
+      gl.enable(gl.DEPTH_TEST);
+
+      setupInputHandlers();
+      kostka();
+      initCamera();
+
+      requestAnimationFrame(draw);
+    }
+
+    function initShaders(gl) {
+      const vsSource = document.getElementById("vertex-shader").text;
+      const fsSource = document.getElementById("fragment-shader").text;
+
+      const vs = compileShader(gl.VERTEX_SHADER, vsSource);
+      const fs = compileShader(gl.FRAGMENT_SHADER, fsSource);
+
+      const prog = gl.createProgram();
+      gl.attachShader(prog, vs);
+      gl.attachShader(prog, fs);
+      gl.linkProgram(prog);
+
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        console.error("Link error:", gl.getProgramInfoLog(prog));
+        return null;
+      }
+      return prog;
+    }
+
+    function compileShader(type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error("Shader error:", gl.getShaderInfoLog(shader));
+        return null;
+      }
+      return shader;
+    }
+
+    function kostka() {
+      const vertices = [
+      -0.5, -0.5, -0.5,  0.0, 0.0, 0.0,
+       0.5, -0.5, -0.5,  0.0, 0.0, 1.0,
+       0.5,  0.5, -0.5,  0.0, 1.0, 1.0,
+       0.5,  0.5, -0.5,  0.0, 1.0, 1.0,
+      -0.5,  0.5, -0.5,  0.0, 1.0, 0.0,
+      -0.5, -0.5, -0.5,  0.0, 0.0, 0.0,
+
+      -0.5, -0.5,  0.5,  0.0, 0.0, 0.0,
+       0.5, -0.5,  0.5,  1.0, 0.0, 1.0,
+       0.5,  0.5,  0.5,  1.0, 1.0, 1.0,
+       0.5,  0.5,  0.5,  1.0, 1.0, 1.0,
+      -0.5,  0.5,  0.5,  0.0, 1.0, 0.0,
+      -0.5, -0.5,  0.5,  0.0, 0.0, 0.0,
+
+      -0.5,  0.5,  0.5,  1.0, 0.0, 1.0,
+      -0.5,  0.5, -0.5,  1.0, 1.0, 1.0,
+      -0.5, -0.5, -0.5,  0.0, 1.0, 0.0,
+      -0.5, -0.5, -0.5,  0.0, 1.0, 0.0,
+      -0.5, -0.5,  0.5,  0.0, 0.0, 0.0,
+      -0.5,  0.5,  0.5,  1.0, 0.0, 1.0,
+
+       0.5,  0.5,  0.5,  1.0, 0.0, 1.0,
+       0.5,  0.5, -0.5,  1.0, 1.0, 1.0,
+       0.5, -0.5, -0.5,  0.0, 1.0, 0.0,
+       0.5, -0.5, -0.5,  0.0, 1.0, 0.0,
+       0.5, -0.5,  0.5,  0.0, 0.0, 0.0,
+       0.5,  0.5,  0.5,  1.0, 0.0, 1.0,
+
+      -0.5, -0.5, -0.5,  0.0, 1.0, 0.0,
+       0.5, -0.5, -0.5,  1.0, 1.0, 1.0,
+       0.5, -0.5,  0.5,  1.0, 0.0, 1.0,
+       0.5, -0.5,  0.5,  1.0, 0.0, 1.0,
+      -0.5, -0.5,  0.5,  0.0, 0.0, 0.0,
+      -0.5, -0.5, -0.5,  0.0, 1.0, 0.0,
+      
+      -0.5,  0.5, -0.5,  0.0, 1.0, 0.0,
+       0.5,  0.5, -0.5,  1.0, 1.0, 1.0,
+       0.5,  0.5,  0.5,  1.0, 0.0, 1.0,
+       0.5,  0.5,  0.5,  1.0, 0.0, 1.0,
+      -0.5,  0.5,  0.5,  0.0, 0.0, 0.0,
+      -0.5,  0.5, -0.5,  0.0, 1.0, 0.0
+      ];
+
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+      const posAttr = gl.getAttribLocation(program, "position");
+      const colAttr = gl.getAttribLocation(program, "color");
+
+      gl.vertexAttribPointer(posAttr, 3, gl.FLOAT, false, 6 * 4, 0);
+      gl.enableVertexAttribArray(posAttr);
+
+      gl.vertexAttribPointer(colAttr, 3, gl.FLOAT, false, 6 * 4, 3 * 4);
+      gl.enableVertexAttribArray(colAttr);
+
+      n_draw = 36;
+    }
+
+    function setupInputHandlers() {
+      window.addEventListener("keydown", e => keys[e.code] = true);
+      window.addEventListener("keyup", e => keys[e.code] = false);
+    }
+
+    function initCamera() {
+      camera.pos = vec3.fromValues(0, 0, 3);
+      camera.front = vec3.fromValues(0, 0, -1);
+      camera.up = vec3.fromValues(0, 1, 0);
+      camera.angle = 0.0;
+      camera.speed = 0.05;
+    }
+
+    function handleCamera() {
+      const delta = camera.speed;
+      if (keys["ArrowUp"] || keys["KeyW"]) move(camera, delta);
+      if (keys["ArrowDown"] || keys["KeyS"]) move(camera, -delta);
+      if (keys["ArrowLeft"] || keys["KeyA"]) rotate(camera, -delta);
+      if (keys["ArrowRight"] || keys["KeyD"]) rotate(camera, delta);
+
+      // Add key Z to enable/disable z-buffer
+      if (keys["KeyZ"]) {
+        if (gl.isEnabled(gl.DEPTH_TEST)) {
+          gl.disable(gl.DEPTH_TEST);
+        } else {
+          gl.enable(gl.DEPTH_TEST);
+        }
+        keys["KeyZ"] = false; // Reset button state
+      }
+
+      const cameraFrontTmp = vec3.create();
+      vec3.add(cameraFrontTmp, camera.pos, camera.front);
+
+      const view = mat4.create();
+      mat4.lookAt(view, camera.pos, cameraFrontTmp, camera.up);
+
+      const proj = mat4.create();
+      mat4.perspective(proj, 60 * Math.PI / 180, gl.canvas.width / gl.canvas.height, 0.1, 100.0);
+
+      const model = mat4.create();
+      mat4.identity(model);
+
+      gl.uniformMatrix4fv(gl.getUniformLocation(program, "view"), false, view);
+      gl.uniformMatrix4fv(gl.getUniformLocation(program, "proj"), false, proj);
+      gl.uniformMatrix4fv(gl.getUniformLocation(program, "model"), false, model);
+    }
+
+    function move(camera, speed) {
+      camera.pos[0] += speed * camera.front[0];
+      camera.pos[1] += speed * camera.front[1];
+      camera.pos[2] += speed * camera.front[2];
+    }
+
+    function rotate(camera, speed) {
+      camera.angle += speed;
+      camera.front[0] = Math.sin(camera.angle);
+      camera.front[2] = -Math.cos(camera.angle);
+    }
+
+    function draw() {
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      handleCamera();
+      gl.drawArrays(gl.TRIANGLES, 0, n_draw);
+      requestAnimationFrame(draw);
+    }
+
+    window.onkeydown = (e) => {
+      if (e.key === "Escape") {
+        if (confirm("Czy na pewno chcesz zamknąć zakładkę?")) {
+          window.close();
+        }
+      }
+    };
+  </script>
+  <script>
+    window.addEventListener("load", start);
+  </script>
+</body>
+</html>
