@@ -41,9 +41,14 @@
     uniform sampler2D texture1;
     uniform sampler2D texture2;
     uniform int useTexture2;
+    uniform int blendMode; // 0 = normal, 1 = blend
 
     void main() {
-      if (useTexture2 == 1) {
+      if (blendMode == 1) {
+        vec4 t1 = texture2D(texture1, TexCoord);
+        vec4 t2 = texture2D(texture2, TexCoord);
+        gl_FragColor = 0.5 * t1 + 0.5 * t2;
+      } else if (useTexture2 == 1) {
         gl_FragColor = texture2D(texture2, TexCoord);
       } else {
         gl_FragColor = texture2D(texture1, TexCoord);
@@ -63,7 +68,7 @@
     let elapsedTime = 0;
     let texture1;
     let texture2;
-    let drawMode = 2; // 1 = jedna tekstura, 2 = naprzemienne tekstury
+    let drawMode = 2; // 1 = jedna tekstura, 2 = naprzemienne tekstury, 3 = blend
     
 
     function start() {
@@ -252,6 +257,10 @@
           drawMode = 2;
           document.getElementById("mode").textContent = "Tryb: Naprzemienne tekstury (2)";
         }
+        if (e.code === "Digit3" && !document.pointerLockElement) {
+          drawMode = 3;
+          document.getElementById("mode").textContent = "Tryb: Mieszanie tekstur (3)";
+        }
       });
       window.addEventListener("keyup", e => keys[e.code] = false);
     }
@@ -388,21 +397,28 @@
       handleCamera();
 
       if (drawMode === 1) {
+        gl.uniform1i(gl.getUniformLocation(program, "blendMode"), 0);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, texture1);
         gl.uniform1i(gl.getUniformLocation(program, "useTexture2"), 0);
         gl.drawArrays(gl.TRIANGLES, 0, n_draw);
-      } else {
-        // Bindowanie obu tekstur na odpowiednie sloty
+      } else if (drawMode === 2) {
+        gl.uniform1i(gl.getUniformLocation(program, "blendMode"), 0);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, texture1);
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_2D, texture2);
-        // W pętli zmieniamy tylko uniform useTexture2
         for (let i = 0; i < 6; i++) {
           gl.uniform1i(gl.getUniformLocation(program, "useTexture2"), i % 2);
           gl.drawArrays(gl.TRIANGLES, i * (n_draw/6), n_draw/6);
         }
+      } else if (drawMode === 3) {
+        gl.uniform1i(gl.getUniformLocation(program, "blendMode"), 1);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture1);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, texture2);
+        gl.drawArrays(gl.TRIANGLES, 0, n_draw);
       }
       
       requestAnimationFrame(draw);
