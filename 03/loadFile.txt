@@ -47,11 +47,10 @@ for (let i=0;i<arrayCopy.length-1;i++)
 	}
 }
   // console.log(vertices);
-//	console.log(normals);
- //	console.log(coords);
- //	console.log(triangles);
-
- 	//console.log(triangles.length);
+  // console.log(normals);
+  // console.log(coords);
+  // console.log(triangles);
+  // console.log(triangles.length);
 
 let vert_array=[];
 

@@ -70,7 +70,30 @@
     let texture2;
     let drawMode = 1; // 1 = jedna tekstura, 2 = naprzemienne tekstury, 3 = blend
     let swapTextures = false; // do mieszania tekstur w trybie 2
+    let stereoMode = 0; // 0 = mono, 1 = anaglyph, 2 = side-by-side
+    let eyeSeparation = 0.2; // domyślna separacja oczu
+    let sepHistory = [];
+    const MAX_SEP_HISTORY = 5;
     
+
+    function StereoProjection(_left, _right, _bottom, _top, _near, _far, _zero_plane, _dist, _eye) {
+      // Kod z PDF, dostosowany do glMatrix
+      let _dx = _right - _left;
+      let _dy = _top - _bottom;
+      let _xmid = (_right + _left) / 2.0;
+      let _ymid = (_top + _bottom) / 2.0;
+      let _clip_near = _dist + _zero_plane - _near;
+      let _clip_far = _dist + _zero_plane - _far;
+      let _n_over_d = _clip_near / _dist;
+      let _topw = _n_over_d * _dy / 2.0;
+      let _bottomw = -_topw;
+      let _rightw = _n_over_d * (_dx / 2.0 - _eye);
+      let _leftw = _n_over_d * (-_dx / 2.0 - _eye);
+      const proj = mat4.create();
+      mat4.frustum(proj, _leftw, _rightw, _bottomw, _topw, _clip_near, _clip_far);
+      mat4.translate(proj, proj, [-_eye, -_ymid, 0]);
+      return proj;
+    }
 
     function start() {
       const vec3 = glMatrix.vec3;
@@ -156,7 +179,7 @@
       initCamera();
 
       requestAnimationFrame(draw);
-      document.getElementById("mode").textContent = "Tryb: Jedna tekstura (1)";
+      updateModeDisplay("Tryb: Jedna tekstura (1)");
     }
 
     function initShaders(gl) {
@@ -247,23 +270,61 @@
       n_draw = vertices.length / 8;
     }
 
+    function updateModeDisplay(mainText) {
+      // mainText: np. "Tryb: Jedna tekstura (1)" lub "Tryb: Mono (Q)"
+      let html = `<div>${mainText}</div>`;
+      if (sepHistory.length > 0) {
+        html += sepHistory.map(e => `<div style='font-size:0.95em;opacity:0.8'>${e}</div>`).join("");
+      }
+      document.getElementById("mode").innerHTML = html;
+    }
+
     function setupInputHandlers() {
       window.addEventListener("keydown", e => {
         keys[e.code] = true;
         if (e.code === "Digit1" && !document.pointerLockElement) {
           drawMode = 1;
-          document.getElementById("mode").textContent = "Tryb: Jedna tekstura (1)";
+          updateModeDisplay("Tryb: Jedna tekstura (1)");
         }
         if (e.code === "Digit2" && !document.pointerLockElement) {
           drawMode = 2;
-          document.getElementById("mode").textContent = "Tryb: Naprzemienne tekstury (2)";
+          updateModeDisplay("Tryb: Naprzemienne tekstury (2)");
         }
         if (e.code === "Digit3" && !document.pointerLockElement) {
           drawMode = 3;
-          document.getElementById("mode").textContent = "Tryb: Mieszanie tekstur (3)";
+          updateModeDisplay("Tryb: Mieszanie tekstur (3)");
         }
         if (e.code === "KeyR" && drawMode === 2 && !document.pointerLockElement) {
           swapTextures = !swapTextures;
+        }
+        if (e.code === "KeyQ" && !document.pointerLockElement) {
+          stereoMode = 0;
+          updateModeDisplay("Tryb: Mono (Q)");
+        }
+        if (e.code === "KeyW" && !document.pointerLockElement) {
+          stereoMode = 1;
+          updateModeDisplay("Tryb: Anaglyph 3D (W)");
+        }
+        if (e.code === "KeyE" && !document.pointerLockElement) {
+          stereoMode = 2;
+          updateModeDisplay("Tryb: Side-by-side (E)");
+        }
+        if ((e.key === "+" || e.key === "=") && !document.pointerLockElement) {
+          eyeSeparation += 0.01;
+          sepHistory.push(`Sep: ${eyeSeparation.toFixed(2)}`);
+          if (sepHistory.length > MAX_SEP_HISTORY) sepHistory.shift();
+          // Zaktualizuj główny tryb (na górze)
+          let mainText = document.getElementById("mode").firstChild?.textContent || "";
+          if (!mainText || mainText.startsWith("Sep:")) mainText = "Tryb: Jedna tekstura (1)";
+          updateModeDisplay(mainText);
+        }
+        if ((e.key === "-" || e.key === "_") && !document.pointerLockElement) {
+          eyeSeparation = Math.max(0, eyeSeparation - 0.01);
+          sepHistory.push(`Sep: ${eyeSeparation.toFixed(2)}`);
+          if (sepHistory.length > MAX_SEP_HISTORY) sepHistory.shift();
+          let mainText = document.getElementById("mode").firstChild?.textContent || "";
+          if (!mainText || mainText.startsWith("Sep:")) mainText = "Tryb: Jedna tekstura (1)";
+          updateModeDisplay(mainText);
         }
       });
       window.addEventListener("keyup", e => keys[e.code] = false);
@@ -387,19 +448,7 @@
       camera.pos[2] += speed * camera.front[2];
     }
 
-    function draw() {
-      elapsedTime = performance.now() - startTime;
-      startTime = performance.now();
-      licznik++;
-      let fFps = 1000 / elapsedTime;
-      if(licznik > fFps) {
-        fpsElem.textContent = `FPS: ${fFps.toFixed(1)}`;
-        licznik = 0;
-      }
-
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-      handleCamera();
-
+    function drawCubeWithTextures() {
       if (drawMode === 1) {
         gl.uniform1i(gl.getUniformLocation(program, "blendMode"), 0);
         gl.activeTexture(gl.TEXTURE0);
@@ -419,13 +468,66 @@
         }
       } else if (drawMode === 3) {
         gl.uniform1i(gl.getUniformLocation(program, "blendMode"), 1);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, texture1);
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, texture2);
-      gl.drawArrays(gl.TRIANGLES, 0, n_draw);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture1);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, texture2);
+        gl.drawArrays(gl.TRIANGLES, 0, n_draw);
       }
-      
+    }
+
+    function draw() {
+      elapsedTime = performance.now() - startTime;
+      startTime = performance.now();
+      licznik++;
+      let fFps = 1000 / elapsedTime;
+      if(licznik > fFps) {
+        fpsElem.textContent = `FPS: ${fFps.toFixed(1)}`;
+        licznik = 0;
+      }
+
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      handleCamera();
+
+      // --- STEREOSKOPIA ---
+      if (stereoMode === 0) { // MONO
+        // Standardowa projekcja
+        const proj = mat4.create();
+        mat4.perspective(proj, 60 * Math.PI / 180, gl.canvas.width / gl.canvas.height, 0.1, 100.0);
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, "proj"), false, proj);
+        gl.colorMask(true, true, true, true);
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+        drawCubeWithTextures();
+      } else if (stereoMode === 1) { // ANAGLYPH
+        // Lewa (czerwona)
+        gl.colorMask(true, false, false, true);
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+        let projL = StereoProjection(-6, 6, -4.8, 4.8, 12.99, -100, 0, 13, -eyeSeparation/2);
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, "proj"), false, projL);
+        drawCubeWithTextures();
+        // Prawa (zielono-niebieska)
+        gl.clear(gl.DEPTH_BUFFER_BIT);
+        gl.colorMask(false, true, true, true);
+        let projR = StereoProjection(-6, 6, -4.8, 4.8, 12.99, -100, 0, 13, eyeSeparation/2);
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, "proj"), false, projR);
+        drawCubeWithTextures();
+        gl.colorMask(true, true, true, true);
+      } else if (stereoMode === 2) { // SIDE-BY-SIDE
+        // Lewa
+        gl.viewport(0, 0, gl.canvas.width/2, gl.canvas.height);
+        let projL = StereoProjection(-6, 6, -4.8, 4.8, 12.99, -100, 0, 13, -eyeSeparation/2);
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, "proj"), false, projL);
+        drawCubeWithTextures();
+        // Prawa
+        gl.viewport(gl.canvas.width/2, 0, gl.canvas.width/2, gl.canvas.height);
+        let projR = StereoProjection(-6, 6, -4.8, 4.8, 12.99, -100, 0, 13, eyeSeparation/2);
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, "proj"), false, projR);
+        drawCubeWithTextures();
+        // Przywróć viewport
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      }
+      // --- KONIEC STEREOSKOPII ---
+
       requestAnimationFrame(draw);
     }
 
